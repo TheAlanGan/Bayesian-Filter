@@ -30,10 +30,10 @@ for (t in 2:n) {
 epsilon <- rnorm(n, 0, true.R)
 y <- H * x + epsilon
 
-# remove <- c(40:43,80:83)
+remove <- c(40:43,80:83)
 # remove <- 30:43
 
-# y[remove] <- NA
+y[remove] <- NA
 
 
 
@@ -75,24 +75,39 @@ filter.update <- function(forcast.x, forcast.Pt, y) {
 
 ### The filtering
 
-m <- 100
+m <- 100 # Number of Monte Carlo samples
 
 filter.x <- matrix(NA, nrow = m, ncol = n+1)
 forcast.x <- matrix(NA, nrow = m, ncol = n+1)
+P <- rep(NA, n+1)
+
 filter.x[,1] <- rnorm(m, 0, Q)
+
+
 
 for (t in 2:(n+1)) {
   forcast.x[,t] <- forward.evolution(filter.x[,(t-1)])
-  P <- get.forcast.Pt(forcast.x[,t])
-  filter.x[,t] <- filter.update(forcast.x[,t], P, y[t-1])
+  P[t] <- get.forcast.Pt(forcast.x[,t])
+  
+  if (is.na(y[t-1])) {
+    filter.x[,t] <- forcast.x[,t]
+  } else {
+    filter.x[,t] <- filter.update(forcast.x[,t], P[t], y[t-1])
+  }
+  
 }
 
 
 filter.x.mean <- apply(filter.x, 2, mean)
 filter.x.mean <- filter.x.mean[-1]
+filter.Pt <- apply(filter.x, 2, var)
+filter.Pt <- filter.Pt[-1]
 
 
 
+
+
+### Plotting the filter
 
 plot(x, col = 'orange', type = 'l', ylim = c(min(x)-0.1, max(x)+0.1), xlab = 't')
 points(y, col = 'red', cex = 0.8, pch = 16)
@@ -104,7 +119,7 @@ legend("topright", legend = c("Truth", "Data", "Filter"),
 
 
 
-
+#plot(filter.Pt, type = 'l', ylim = c(0, 1.4))
 
 
 
