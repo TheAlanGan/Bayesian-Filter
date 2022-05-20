@@ -5,8 +5,10 @@
 ### Parameters
 
 n <- 100 # sample size
-H <- 1   # Data covariate
+m <- 100 # Number of Monte Carlo samples
 
+
+H <- 1   # Data covariate
 true.R <- 0.1 # Data Variance
 true.Q <- 0.5 # Parameter Autoregressive Variance
 true.M <- 0.7 # AR-1 Term
@@ -21,7 +23,7 @@ M <- 0.7
 set.seed(123)
 nu <- rnorm(n, 0, true.Q)
 x <- rep(NA, n)
-x[1] <- 0
+x[1] <- rnorm(1)
 
 for (t in 2:n) {
   x[t] <- (true.M)*x[t-1] + nu[t]
@@ -75,13 +77,11 @@ filter.update <- function(forcast.x, forcast.Pt, y) {
 
 ### The filtering
 
-m <- 100 # Number of Monte Carlo samples
-
 filter.x <- matrix(NA, nrow = m, ncol = n+1)
 forcast.x <- matrix(NA, nrow = m, ncol = n+1)
 P <- rep(NA, n+1)
 
-filter.x[,1] <- rnorm(m, 0, Q)
+filter.x[,1] <- rnorm(m, 0, 1)
 
 
 

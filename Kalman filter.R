@@ -7,7 +7,7 @@
 n <- 100 # sample size
 H <- 1   # Data covariate
 
-true.R <- 0.1 # Data Variance
+true.R <- 0.1 # Data Variance / Measurement error
 true.Q <- 0.5 # Parameter Autoregressive Variance
 true.M <- 0.7 # AR-1 Term
 
@@ -22,7 +22,7 @@ M <- 0.7
 set.seed(123)
 nu <- rnorm(n, 0, true.Q)
 x <- rep(NA, n)
-x[1] <- 0
+x[1] <- rnorm(1)
 
 for (t in 2:n) {
   x[t] <- (true.M)*x[t-1] + nu[t]
