@@ -1,4 +1,7 @@
 
+##### Section 3.2 Kalman Smoothing
+
+
 source("C:/Users/Alang/Downloads/Summer - 2022 - OC/Bayesian-Filter/Kalman filter.R")
 
 ### Parameters
