@@ -33,10 +33,10 @@ for (t in 2:n) {
 epsilon <- rnorm(n, 0, true.R)
 y <- H * x + epsilon
 
-remove <- c(40:43,80:83)
+#remove <- c(40:43,80:83)
 # remove <- 30:43
 
-y[remove] <- NA
+#y[remove] <- NA
 
 
 
@@ -69,10 +69,20 @@ MH <- function(N.mc) {
     #x[i] <- (TF[i-1] * y) + ((!TF[i-1]) * x[i-1])
     
     prop <- rand.walk.prop(x[,i-1], M[i-1], sigma2eta[i-1])
-    rho <- eval.density(y, prop$x, prop$M, prop$sigma2eta) * rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
-      (eval.density(x[,i-1], M[i-1], sigma2eta[i-1]) * rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]))
-    AR <- min(rho,1)
-    TF[i-1] <- sample(c(T, F), 1, prob = c(AR, 1-AR))
+    #rho <- eval.density(y, prop$x, prop$M, prop$sigma2eta) * rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
+    #  (eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1]) * rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]))
+    
+    numerator <- eval.density(y, prop$x, prop$M, prop$sigma2eta)
+    denominator <- eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1])
+    
+    if (numerator < 1e-10) {
+      rho <- 0
+    } else {
+      rho <- numertor / denominator
+    }
+    
+    #AR <- min(rho,1)
+    TF[i-1] <- runif(1) < rho #sample(c(T, F), 1, prob = c(AR, 1-AR))
     
     if (TF[i-1]) {
       x[,i] <- prop$x
@@ -84,7 +94,7 @@ MH <- function(N.mc) {
       sigma2eta[i] <- sigma2eta[i-1]
     }
   }
-  return(list(path = x, accept.rate = mean(TF)))
+  return(list(x.path = x, M.path = M, sigma2eta.path = sigma2eta, accept.rate = mean(TF)))
 }
 
 
@@ -94,7 +104,7 @@ eval.density <- function(y, x, M, sigma2eta) { # Target density
   # x is vector
   # Else are numbers
   
-  dens <- prod(dnorm(y[1:n], x[2:(n+1)], R) * dnorm(x[2:(n+1)], M*x[1:n], sqrt(sigma2eta)) * dnorm(x[1]) * dunif(M, -1, 1) * dinvgamma(sigma2eta, 2, scale = 1))
+  dens <- prod(dnorm(y[1:n], x[2:(n+1)], R) * dnorm(x = x[2:(n+1)], mean =  M*x[1:n], sd = sqrt(sigma2eta)) * dnorm(x[1]) * dunif(M, -1, 1) * dinvgamma(sigma2eta, 2, scale = 1))
   return(dens)
 }
 
@@ -106,7 +116,7 @@ rand.walk.prop <- function(x, M, sigma2eta) { # Proposal
   x.new <- rnorm(n+1, mean = x, sd = v[1])
   M.new <- rnorm(1, mean = M, sd = v[2])
   sigma2eta.new <- rtruncnorm(1, a = 0, mean = sigma2eta, sd = v[3])
-  return(list(x = x.new, M = M.new, sigam2eta = sigma2eta.new))
+  return(list(x = x.new, M = M.new, sigma2eta = sigma2eta.new))
 }
 
 
