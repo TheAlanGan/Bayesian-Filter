@@ -19,14 +19,16 @@ M <- 0.7
 
 ### Generating Simulated Data
 
-set.seed(123)
+set.seed(444)
 nu <- rnorm(n, 0, true.Q)
-x <- rep(NA, n)
+x <- rep(NA, n+1)
 x[1] <- rnorm(1)
 
-for (t in 2:n) {
-  x[t] <- (true.M)*x[t-1] + nu[t]
+for (t in 2:(n+1)) {
+  x[t] <- (true.M)*x[t-1] + nu[t-1]
 }
+
+x <- x[-1]
 
 epsilon <- rnorm(n, 0, true.R)
 y <- H * x + epsilon
