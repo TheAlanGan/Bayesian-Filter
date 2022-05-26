@@ -72,7 +72,9 @@ MH <- function(N.mc) {
     #TF[i-1] <- sample(c(T, F), 1, prob = c(AR, 1-AR))
     #x[i] <- (TF[i-1] * y) + ((!TF[i-1]) * x[i-1])
     
-    prop <- rand.walk.prop(x[,i-1], M[i-1], sigma2eta[i-1])
+    # prop <- rand.walk.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Normal random walk
+    prop <- rand.walk.unif.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Uniform random walk
+    
     #rho <- eval.density(y, prop$x, prop$M, prop$sigma2eta) * rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
     #  (eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1]) * rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]))
     
@@ -113,6 +115,8 @@ eval.density <- function(y, x, M, sigma2eta) { # Target density
 }
 
 
+
+## Normal random walk
 v <- c(0.05, 0.01, 0.01) # step sizes for random walk
 
 rand.walk.prop <- function(x, M, sigma2eta) { # Proposal
@@ -130,17 +134,34 @@ rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Pro
 }
 
 
+## Uniform random walk
+rw.size <- c(0.5, 0.1, 0.1)
+rand.walk.unif.prop <- function(x, M, sigma2eta) {
+  n <- length(x)-1
+  x.new <- runif(n+1, min = x-rw.size[1]/2, max = x+rw.size[1]/2)
+  M.new <- runif(1, min = M-rw.size[2]/2, max = M+rw.size[2]/2)
+  sigma2eta.new <- runif(1, min = sigma2eta-rw.size[3]/2, max = sigma2eta+rw.size[3]/2)
+  return(list(x = x.new, M = M.new, sigma2eta = sigma2eta.new))
+}
+
+rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Proposal density
+  dens <- prod(dnorm(x.new, x, v[1])) * dnorm(M.new, M, v[2]) * dtruncnorm(sigma2eta.new, a = 0, mean = sigma2eta, sd = v[3])
+  return(dens)
+}
+
+
+
 mc <- MH(100000)
 mc$accept.rate
 
 
-# plot(mc$M.path)
+# plot(mc$M.path, type = 'l')
 # hist(mc$M.path, breaks = 50)
-# acf(mc$M.path)
+# acf(mc$M.path, lag.max = 100)
 
-# plot(mc$sigma2eta.path)
+# plot(mc$sigma2eta.path, type = 'l')
 # hist(mc$sigma2eta.path, breaks = 50)
-# acf(mc$sigma2eta.path)
+# acf(mc$sigma2eta.path, lag.max = 100)
 
 filter.x.mcmc <- apply(mc$x.path, 1, mean)
 filter.x.2p5 <- apply(mc$x.path, 1, quantile, probs = c(0.025))
