@@ -4,6 +4,7 @@
 
 library(invgamma)
 library(truncnorm)
+library(MASS)
 
 ### Parameters
 
@@ -44,6 +45,7 @@ y <- H * x + epsilon
 
 
 
+
 ### Metropolis Hastings
 
 
@@ -58,6 +60,7 @@ MH <- function(N.mc) {
   x <- matrix(NA, ncol = N.mc, nrow = n+1)
   M <- rep(NA, N.mc)
   sigma2eta <- rep(NA, N.mc)
+  omega <- rep(NA, N.mc)
   
   #set.seed(444)
   x[1,1] <- x0.true
@@ -66,29 +69,42 @@ MH <- function(N.mc) {
   sigma2eta[1] <- 0.5
   
   for (i in 2:N.mc) {
-    #y <- sample.prop(x[i-1], ...)
-    #rho <- target.d(y) * prop.d(x[i-1], y, ...) / (target.d(x[i-1]) * prop.d(y, x[i-1], ...))
-    #AR <- min(rho,1)
-    #TF[i-1] <- sample(c(T, F), 1, prob = c(AR, 1-AR))
-    #x[i] <- (TF[i-1] * y) + ((!TF[i-1]) * x[i-1])
+
+    # Proposal step
+    prop <- rand.walk.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Normal random walk
+    # prop <- rand.walk.unif.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Uniform random walk
     
-    # prop <- rand.walk.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Normal random walk
-    prop <- rand.walk.unif.prop(x[,i-1], M[i-1], sigma2eta[i-1])  # Uniform random walk
+    # Acceptance probability step
     
     #rho <- eval.density(y, prop$x, prop$M, prop$sigma2eta) * rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
     #  (eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1]) * rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]))
     
-    numerator <- eval.density(y, prop$x, prop$M, prop$sigma2eta)
-    denominator <- eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1])
     
-    if (numerator < 1e-15) {
-      rho <- 0
-    } else {
-      rho <- numerator / denominator
-    }
+    ### Note: 'y' here is the observed data.
+    # numerator <- eval.density(y, prop$x, prop$M, prop$sigma2eta)
+    # denominator <- eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1])
+    # 
+    # if (numerator < 1e-20) {
+    #   rho <- 0
+    # } else {
+    #   rho <- numerator / denominator
+    # }
+    # 
+    # TF[i-1] <- runif(1) < rho
+    #### This is NOT working!!!
     
-    #AR <- min(rho,1)
-    TF[i-1] <- runif(1) < rho #sample(c(T, F), 1, prob = c(AR, 1-AR))
+    
+    
+    omega[i] <- ratio.of.target.dens(y, prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
+    TF[i-1] <- runif(1) < omega[i]
+    #### This IS working!!!
+    
+    
+    
+    # omega[i] <- log.ratio.of.target.dens(y, prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
+    # TF[i-1] <- log(runif(1)) < omega[i] # for log.ratio...
+    
+    
     
     if (TF[i-1]) {
       x[,i] <- prop$x
@@ -100,7 +116,7 @@ MH <- function(N.mc) {
       sigma2eta[i] <- sigma2eta[i-1]
     }
   }
-  return(list(x.path = x, M.path = M, sigma2eta.path = sigma2eta, accept.rate = mean(TF)))
+  return(list(x.path = x, M.path = M, sigma2eta.path = sigma2eta, accept.rate = mean(TF), omega = omega))
 }
 
 
@@ -109,11 +125,49 @@ eval.density <- function(y, x, M, sigma2eta) { # Target density
   # y is vector of data
   # x is vector
   # Else are numbers
+  n <- length(x) - 1
   
   dens <- prod(dnorm(y[1:n], x[2:(n+1)], R) * dnorm(x = x[2:(n+1)], mean =  M*x[1:n], sd = sqrt(sigma2eta)) * dnorm(x[1]) * dunif(M, -1, 1) * dinvgamma(sigma2eta, 2, scale = 1))
   return(dens)
 }
 
+ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
+  # x, M, and sigma2eta are the CURRENT values in the MCMC chain
+  # prop.x, prop.M, prop.sigma2eta are the PROPOSED values
+  # y is the observed data
+  n <- length(x)-1
+
+  omega <- (prop.sigma2eta / sigma2eta)^(-n/2 - 3) *
+    exp(1/sigma2eta - 1/prop.sigma2eta) *
+    exp(1/2 * (x[1]^2 - prop.x[1]^2)) * 
+    exp(1/(2*R) * ( sum((y-x[-1])^2) - sum((y-prop.x[-1])^2) )) *
+    exp(1/2 * (1/sigma2eta * sum((x[-1]-M*x[-(n+1)])^2) - 1/prop.sigma2eta * sum((prop.x[-1]-prop.M*prop.x[-(n+1)])^2)) )
+  
+  return(omega)
+}
+
+
+log.ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
+  # x, M, and sigma2eta are the CURRENT values in the MCMC chain
+  # prop.x, prop.M, prop.sigma2eta are the PROPOSED values
+  # y is the observed data
+  n <- length(x)-1
+  
+  log.omega <- (-n/2 - 3)*log(prop.sigma2eta / sigma2eta) +
+    (1/sigma2eta - 1/prop.sigma2eta) +
+    (1/2 * (x[1]^2 - prop.x[1]^2)) + 
+    (1/(2*R) * ( sum((y-x[-1])^2) - sum((y-prop.x[-1])^2) )) +
+    (1/2 * (1/sigma2eta * sum((x[-1]-M*x[-(n+1)])^2) - 1/prop.sigma2eta * sum((prop.x[-1]-prop.M*prop.x[-(n+1)])^2)) )
+  
+  return(log.omega)
+}
+
+
+
+
+ratio.of.random.walk.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
+  
+}
 
 
 ## Normal random walk
@@ -151,21 +205,35 @@ rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Pro
 
 
 
-mc <- MH(100000)
+
+
+
+
+### Running the MCMC
+
+
+N.mc <- 100000
+burn <- 20000
+
+mc <- MH(N.mc)
 mc$accept.rate
 
+mcmc.x <- mc$x.path[,burn:n]
+mcmc.M <- mc$M.path[burn:n]
+mcmc.sigma2eta <- mc$sigma2eta.path[burn:n]
 
-# plot(mc$M.path, type = 'l')
-# hist(mc$M.path, breaks = 50)
-# acf(mc$M.path, lag.max = 100)
 
-# plot(mc$sigma2eta.path, type = 'l')
-# hist(mc$sigma2eta.path, breaks = 50)
-# acf(mc$sigma2eta.path, lag.max = 100)
+# plot(mcmc.M, type = 'l')
+# hist(mcmc.M, breaks = 50)
+# acf(mcmc.M, lag.max = 100)
 
-filter.x.mcmc <- apply(mc$x.path, 1, mean)
-filter.x.2p5 <- apply(mc$x.path, 1, quantile, probs = c(0.025))
-filter.x.97p5 <- apply(mc$x.path, 1, quantile, probs = c(0.975))
+# plot(mcmc.sigma2eta, type = 'l')
+# hist(mcmc.sigma2eta, breaks = 50)
+# acf(mcmc.sigma2eta, lag.max = 100)
+
+filter.x.mcmc <- apply(mcmc.x, 1, mean)
+filter.x.2p5 <- apply(mcmc.x, 1, quantile, probs = c(0.025))
+filter.x.97p5 <- apply(mcmc.x, 1, quantile, probs = c(0.975))
 
 plot(x.true, col = 'orange', type = 'l', ylim = c(min(x)-0.1, max(x)+0.1), xlab = 't')
 points(y, col = 'red', cex = 0.8, pch = 16)
