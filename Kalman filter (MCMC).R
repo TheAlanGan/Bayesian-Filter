@@ -41,6 +41,7 @@ y <- H * x + epsilon
 #remove <- c(40:43,80:83)
 # remove <- 30:43
 
+remove <- 10:15
 #y[remove] <- NA
 
 
@@ -140,7 +141,7 @@ ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2
   omega <- (prop.sigma2eta / sigma2eta)^(-n/2 - 3) *
     exp(1/sigma2eta - 1/prop.sigma2eta) *
     exp(1/2 * (x[1]^2 - prop.x[1]^2)) * 
-    exp(1/(2*R) * ( sum((y-x[-1])^2) - sum((y-prop.x[-1])^2) )) *
+    exp(1/(2*R) * ( sum((y-x[-1])^2, na.rm = T) - sum((y-prop.x[-1])^2, na.rm = T) )) *
     exp(1/2 * (1/sigma2eta * sum((x[-1]-M*x[-(n+1)])^2) - 1/prop.sigma2eta * sum((prop.x[-1]-prop.M*prop.x[-(n+1)])^2)) )
   
   return(omega)
@@ -156,7 +157,7 @@ log.ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, si
   log.omega <- (-n/2 - 3)*log(prop.sigma2eta / sigma2eta) +
     (1/sigma2eta - 1/prop.sigma2eta) +
     (1/2 * (x[1]^2 - prop.x[1]^2)) + 
-    (1/(2*R) * ( sum((y-x[-1])^2) - sum((y-prop.x[-1])^2) )) +
+    (1/(2*R) * ( sum((y-x[-1])^2, na.rm = T) - sum((y-prop.x[-1])^2, na.rm = T) )) +
     (1/2 * (1/sigma2eta * sum((x[-1]-M*x[-(n+1)])^2) - 1/prop.sigma2eta * sum((prop.x[-1]-prop.M*prop.x[-(n+1)])^2)) )
   
   return(log.omega)
@@ -171,13 +172,25 @@ ratio.of.random.walk.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, s
 
 
 ## Normal random walk
-v <- c(0.05, 0.01, 0.01) # step sizes for random walk
+v <- c(1/20, 0.2, 0.2) # step sizes for random walk
 
 rand.walk.prop <- function(x, M, sigma2eta) { # Proposal
   n <- length(x)-1
-  x.new <- rnorm(n+1, mean = x, sd = v[1])
-  M.new <- rnorm(1, mean = M, sd = v[2])
+  
+  ### old
+  # x.new <- rnorm(n+1, mean = x, sd = v[1])
+  # M.new <- rnorm(1, mean = M, sd = v[2])
+  # sigma2eta.new <- rtruncnorm(1, a = 0, mean = sigma2eta, sd = v[3])
+  
+  
+  ### new
+  cov.mat <- proposal.cov.structure(M, sigma2eta, n) * v[1]
+  x.new <- mvrnorm(n=1, mu = x, Sigma = cov.mat)
+  
+  #M.new <- rnorm(1, mean = M, sd = v[1])
+  M.new <- rtruncnorm(1, a = -1, b = 1, mean = M, sd = v[2])
   sigma2eta.new <- rtruncnorm(1, a = 0, mean = sigma2eta, sd = v[3])
+  
   return(list(x = x.new, M = M.new, sigma2eta = sigma2eta.new))
 }
 
@@ -188,20 +201,36 @@ rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Pro
 }
 
 
-## Uniform random walk
-rw.size <- c(0.5, 0.1, 0.1)
-rand.walk.unif.prop <- function(x, M, sigma2eta) {
-  n <- length(x)-1
-  x.new <- runif(n+1, min = x-rw.size[1]/2, max = x+rw.size[1]/2)
-  M.new <- runif(1, min = M-rw.size[2]/2, max = M+rw.size[2]/2)
-  sigma2eta.new <- runif(1, min = sigma2eta-rw.size[3]/2, max = sigma2eta+rw.size[3]/2)
-  return(list(x = x.new, M = M.new, sigma2eta = sigma2eta.new))
+
+
+
+proposal.cov.structure <- function(M, Q, n) {
+  Sigma <- matrix(0, nrow = n+1, ncol = n+1)
+  
+  M.powers <- M^seq(0, 2*n, by = 2)
+  vars <- c(1)
+  for (i in 1:n) {
+    vars[i+1] <- Q * sum(M.powers[0:(i-1)]) + M.powers[i]
+  }
+  
+  diag(Sigma) <- vars
+  
+  for (j in 1:n) {
+    for (i in (j+1):(n+1)) {
+      Sigma[i,j] <- M^(i-j) * Sigma[j,j]
+      Sigma[j,i] <- Sigma[i,j]
+    }
+  }
+  
+  if (!is.positive.definite(Sigma)) {
+    stop("Error!! Sigma not pos def!! wtf")
+  }
+  
+  return(Sigma)
 }
 
-rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Proposal density
-  dens <- prod(dnorm(x.new, x, v[1])) * dnorm(M.new, M, v[2]) * dtruncnorm(sigma2eta.new, a = 0, mean = sigma2eta, sd = v[3])
-  return(dens)
-}
+
+
 
 
 
@@ -212,30 +241,34 @@ rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Pro
 ### Running the MCMC
 
 
-N.mc <- 100000
-burn <- 20000
+N.mc <- 50000
+burn <- 10000
 
 mc <- MH(N.mc)
 mc$accept.rate
 
-mcmc.x <- mc$x.path[,burn:n]
-mcmc.M <- mc$M.path[burn:n]
-mcmc.sigma2eta <- mc$sigma2eta.path[burn:n]
+mcmc.x <- mc$x.path[,burn:N.mc]
+mcmc.M <- mc$M.path[burn:N.mc]
+mcmc.sigma2eta <- mc$sigma2eta.path[burn:N.mc]
 
+
+# plot(mcmc.x[5,], type = 'l')
+# hist(mcmc.x[5,], breaks = 50); abline(v=x[5], col = 'red')
+# acf(mcmc.x[5,], lag.max = 100)
 
 # plot(mcmc.M, type = 'l')
-# hist(mcmc.M, breaks = 50)
+# hist(mcmc.M, breaks = 30); abline(v = true.M, col = 'red')
 # acf(mcmc.M, lag.max = 100)
 
 # plot(mcmc.sigma2eta, type = 'l')
-# hist(mcmc.sigma2eta, breaks = 50)
+# hist(mcmc.sigma2eta, breaks = 50); abline(v = true.Q, col = 'red')
 # acf(mcmc.sigma2eta, lag.max = 100)
 
 filter.x.mcmc <- apply(mcmc.x, 1, mean)
 filter.x.2p5 <- apply(mcmc.x, 1, quantile, probs = c(0.025))
 filter.x.97p5 <- apply(mcmc.x, 1, quantile, probs = c(0.975))
 
-plot(x.true, col = 'orange', type = 'l', ylim = c(min(x)-0.1, max(x)+0.1), xlab = 't')
+plot(x.true, col = 'orange', type = 'l', ylim = c(min(x)-0.3, max(x)+0.3), xlab = 't')
 points(y, col = 'red', cex = 0.8, pch = 16)
 lines(filter.x.mcmc[-1], col = "blue2", lty = 2)
 lines(filter.x.2p5[-1], col = "lightblue", lty = 2)
@@ -245,4 +278,5 @@ legend("topright", legend = c("Truth", "Data", "Filter"),
        pch = c(NA, 16, NA),
        col = c("orange", "red", "blue2"))
 
+mc$accept.rate
 
