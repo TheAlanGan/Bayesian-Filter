@@ -96,7 +96,9 @@ MH <- function(N.mc) {
     
     
     
-    omega[i] <- ratio.of.target.dens(y, prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
+    omega[i] <- ratio.of.target.dens(y, prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]) *
+      rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
+      rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
     TF[i-1] <- runif(1) < omega[i]
     #### This IS working!!!
     
@@ -121,8 +123,8 @@ MH <- function(N.mc) {
 }
 
 
-
-eval.density <- function(y, x, M, sigma2eta) { # Target density
+# Target density
+eval.density <- function(y, x, M, sigma2eta) {
   # y is vector of data
   # x is vector
   # Else are numbers
@@ -132,6 +134,7 @@ eval.density <- function(y, x, M, sigma2eta) { # Target density
   return(dens)
 }
 
+# Ratio of target densities
 ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
   # x, M, and sigma2eta are the CURRENT values in the MCMC chain
   # prop.x, prop.M, prop.sigma2eta are the PROPOSED values
@@ -146,7 +149,6 @@ ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2
   
   return(omega)
 }
-
 
 log.ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
   # x, M, and sigma2eta are the CURRENT values in the MCMC chain
@@ -164,11 +166,6 @@ log.ratio.of.target.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, si
 }
 
 
-
-
-ratio.of.random.walk.dens <- function(y, prop.x, prop.M, prop.sigma2eta, x, M, sigma2eta) {
-  
-}
 
 
 ## Normal random walk
@@ -196,7 +193,8 @@ rand.walk.prop <- function(x, M, sigma2eta) { # Proposal
 
 
 rand.walk.dens <- function(x.new, M.new, sigma2eta.new, x, M, sigma2eta) { # Proposal density
-  dens <- prod(dnorm(x.new, x, v[1])) * dnorm(M.new, M, v[2]) * dtruncnorm(sigma2eta.new, a = 0, mean = sigma2eta, sd = v[3])
+  #dens <- prod(dnorm(x.new, x, v[1])) * dnorm(M.new, M, v[2]) * dtruncnorm(sigma2eta.new, a = 0, mean = sigma2eta, sd = v[3])
+  dens <- dtruncnorm(M.new, a = -1, b = 1, mean = M, sd = v[2]) * dtruncnorm(sigma2eta.new, a = 0, mean = sigma2eta, sd = v[3])
   return(dens)
 }
 
@@ -241,8 +239,8 @@ proposal.cov.structure <- function(M, Q, n) {
 ### Running the MCMC
 
 
-N.mc <- 50000
-burn <- 10000
+N.mc <- 200000
+burn <- 50000
 
 mc <- MH(N.mc)
 mc$accept.rate
