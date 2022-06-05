@@ -4,8 +4,8 @@
 
 ### Parameters
 
-n <- 100 # sample size
-m <- 100 # Number of Monte Carlo samples
+n <- 100 # sample size (data points in x mesh)
+m <- 1000 # Number of Monte Carlo (ensemble) samples
 
 
 H <- 1   # Data covariate
@@ -98,11 +98,15 @@ for (t in 2:(n+1)) {
 }
 
 
+#filter.x <- filter.x[,(-1)] # Removing the time0 points
+
 filter.x.mean <- apply(filter.x, 2, mean)
 filter.x.mean <- filter.x.mean[-1]
 filter.Pt <- apply(filter.x, 2, var)
 filter.Pt <- filter.Pt[-1]
 
+filter.x.2p5 <- apply(filter.x, 2, quantile, probs = c(0.025))
+filter.x.97p5 <- apply(filter.x, 2, quantile, probs = c(0.975))
 
 
 
@@ -112,6 +116,8 @@ filter.Pt <- filter.Pt[-1]
 plot(x, col = 'orange', type = 'l', ylim = c(min(x)-0.1, max(x)+0.1), xlab = 't')
 points(y, col = 'red', cex = 0.8, pch = 16)
 lines(filter.x.mean, col = "blue2", lty = 2)
+lines(filter.x.2p5[-1], col = "lightblue", lty = 2)
+lines(filter.x.97p5[-1], col = "lightblue", lty = 2)
 legend("topright", legend = c("Truth", "Data", "Filter"),
        lty = c(1, NA, 2),
        pch = c(NA, 16, NA),
