@@ -2,13 +2,14 @@
 ##### Section 5.3.1 Simple Gibbs Sampling Example
 ### Except I am doing Metropolis-Hastings instead of Gibbs.
 
-library(invgamma)
-library(truncnorm)
+library(invgamma) # For inverse gamma
+library(truncnorm) # For truncated normal
 library(MASS)
+library(matrixcalc) # For is.positive.def()
 
 ### Parameters
 
-n <- 20 # sample size
+n <- 50 # sample size
 H <- 1   # Data covariate
 
 true.R <- 0.1 # Data Variance / Measurement Error
@@ -23,7 +24,7 @@ M <- 0.7
 ### Generating Simulated Data
 
 set.seed(123)
-nu <- rnorm(n, 0, true.Q)
+nu <- rnorm(n, 0, sd = sqrt(true.Q))
 x <- rep(NA, n+1)
 x[1] <- rnorm(1)
 x0.true <- x[1]
@@ -35,14 +36,14 @@ for (t in 2:(n+1)) {
 x <- x[-1]
 x.true <- x
 
-epsilon <- rnorm(n, 0, true.R)
+epsilon <- rnorm(n, 0, sd = sqrt(true.R))
 y <- H * x + epsilon
 
-#remove <- c(40:43,80:83)
+# remove <- c(40:43,80:83)
 # remove <- 30:43
 
 remove <- 10:15
-#y[remove] <- NA
+y[remove] <- NA
 
 
 
@@ -50,14 +51,14 @@ remove <- 10:15
 ### Metropolis Hastings
 
 
-MH <- function(N.mc) {
+MH <- function(N.mc, y) {
   # target.d() is target density (up to normalizing constant) function
   # prop.d() is proposal density function
   # ... are arguments to pass to prop.d() and sample.prop()
   
+  n <- length(y)
+  
   TF <- c()
-  
-  
   x <- matrix(NA, ncol = N.mc, nrow = n+1)
   M <- rep(NA, N.mc)
   sigma2eta <- rep(NA, N.mc)
@@ -79,20 +80,6 @@ MH <- function(N.mc) {
     
     #rho <- eval.density(y, prop$x, prop$M, prop$sigma2eta) * rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
     #  (eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1]) * rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1]))
-    
-    
-    ### Note: 'y' here is the observed data.
-    # numerator <- eval.density(y, prop$x, prop$M, prop$sigma2eta)
-    # denominator <- eval.density(y, x[,i-1], M[i-1], sigma2eta[i-1])
-    # 
-    # if (numerator < 1e-20) {
-    #   rho <- 0
-    # } else {
-    #   rho <- numerator / denominator
-    # }
-    # 
-    # TF[i-1] <- runif(1) < rho
-    #### This is NOT working!!!
     
     
     
@@ -118,7 +105,12 @@ MH <- function(N.mc) {
       M[i] <- M[i-1]
       sigma2eta[i] <- sigma2eta[i-1]
     }
+    
+    if (i %% round(0.05*N.mc) == 0) { # To monitor progress
+      cat(round(i/N.mc, 2)*100, "% done \n", sep = "")
+    }
   }
+  
   return(list(x.path = x, M.path = M, sigma2eta.path = sigma2eta, accept.rate = mean(TF), omega = omega))
 }
 
@@ -130,7 +122,7 @@ eval.density <- function(y, x, M, sigma2eta) {
   # Else are numbers
   n <- length(x) - 1
   
-  dens <- prod(dnorm(y[1:n], x[2:(n+1)], R) * dnorm(x = x[2:(n+1)], mean =  M*x[1:n], sd = sqrt(sigma2eta)) * dnorm(x[1]) * dunif(M, -1, 1) * dinvgamma(sigma2eta, 2, scale = 1))
+  dens <- prod(dnorm(y[1:n], x[2:(n+1)], sd = sqrt(R)) * dnorm(x = x[2:(n+1)], mean =  M*x[1:n], sd = sqrt(sigma2eta)) * dnorm(x[1]) * dunif(M, -1, 1) * dinvgamma(sigma2eta, 2, scale = 1))
   return(dens)
 }
 
@@ -221,7 +213,7 @@ proposal.cov.structure <- function(M, Q, n) {
   }
   
   if (!is.positive.definite(Sigma)) {
-    stop("Error!! Sigma not pos def!! wtf")
+    stop("Error!! Sigma not pos def!!")
   }
   
   return(Sigma)
@@ -240,9 +232,9 @@ proposal.cov.structure <- function(M, Q, n) {
 
 
 N.mc <- 200000
-burn <- 50000
+burn <- 40000
 
-mc <- MH(N.mc)
+mc <- MH(N.mc, y)
 mc$accept.rate
 
 mcmc.x <- mc$x.path[,burn:N.mc]
@@ -251,22 +243,22 @@ mcmc.sigma2eta <- mc$sigma2eta.path[burn:N.mc]
 
 
 # plot(mcmc.x[5,], type = 'l')
-# hist(mcmc.x[5,], breaks = 50); abline(v=x[5], col = 'red')
+# hist(mcmc.x[5,], breaks = 50, probability = T); abline(v=x[5], col = 'red'); abline(v = mean(mcmc.x[5,]), col = 'blue', lty = 2); lines(density(mcmc.x[5,], n = 50))
 # acf(mcmc.x[5,], lag.max = 100)
-
+# 
 # plot(mcmc.M, type = 'l')
-# hist(mcmc.M, breaks = 30); abline(v = true.M, col = 'red')
+# hist(mcmc.M, breaks = 30, probability = T); abline(v = true.M, col = 'red'); abline(v = mean(mcmc.M), col = 'blue', lty = 2); lines(density(mcmc.M, n = 512))
 # acf(mcmc.M, lag.max = 100)
 
 # plot(mcmc.sigma2eta, type = 'l')
-# hist(mcmc.sigma2eta, breaks = 50); abline(v = true.Q, col = 'red')
+# hist(mcmc.sigma2eta, breaks = 50, probability = T); abline(v = true.Q, col = 'red')
 # acf(mcmc.sigma2eta, lag.max = 100)
 
 filter.x.mcmc <- apply(mcmc.x, 1, mean)
 filter.x.2p5 <- apply(mcmc.x, 1, quantile, probs = c(0.025))
 filter.x.97p5 <- apply(mcmc.x, 1, quantile, probs = c(0.975))
 
-plot(x.true, col = 'orange', type = 'l', ylim = c(min(x)-0.3, max(x)+0.3), xlab = 't')
+plot(x.true, col = 'orange', type = 'l', ylim = c(min(x,y,na.rm=T)-0.3, max(x,y,na.rm=T)+0.3), xlab = 't', main = "MH")
 points(y, col = 'red', cex = 0.8, pch = 16)
 lines(filter.x.mcmc[-1], col = "blue2", lty = 2)
 lines(filter.x.2p5[-1], col = "lightblue", lty = 2)
@@ -275,6 +267,7 @@ legend("topright", legend = c("Truth", "Data", "Filter"),
        lty = c(1, NA, 2),
        pch = c(NA, 16, NA),
        col = c("orange", "red", "blue2"))
+
 
 mc$accept.rate
 
