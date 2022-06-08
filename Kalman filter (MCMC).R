@@ -9,7 +9,7 @@ library(matrixcalc) # For is.positive.def()
 
 ### Parameters
 
-n <- 50 # sample size
+n <- 25 # sample size
 H <- 1   # Data covariate
 
 true.R <- 0.1 # Data Variance / Measurement Error
@@ -87,16 +87,13 @@ MH <- function(N.mc, y) {
       rand.walk.dens(x[,i-1], M[i-1], sigma2eta[i-1], prop$x, prop$M, prop$sigma2eta) /
       rand.walk.dens(prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
     TF[i-1] <- runif(1) < omega[i]
-    #### This IS working!!!
-    
     
     
     # omega[i] <- log.ratio.of.target.dens(y, prop$x, prop$M, prop$sigma2eta, x[,i-1], M[i-1], sigma2eta[i-1])
     # TF[i-1] <- log(runif(1)) < omega[i] # for log.ratio...
     
     
-    
-    if (TF[i-1]) {
+    if (TF[i-1]) { # The accepting/rejecting
       x[,i] <- prop$x
       M[i] <- prop$M
       sigma2eta[i] <- prop$sigma2eta
@@ -231,8 +228,8 @@ proposal.cov.structure <- function(M, Q, n) {
 ### Running the MCMC
 
 
-N.mc <- 200000
-burn <- 40000
+N.mc <- 100000
+burn <- 10000
 
 mc <- MH(N.mc, y)
 mc$accept.rate
@@ -245,7 +242,7 @@ mcmc.sigma2eta <- mc$sigma2eta.path[burn:N.mc]
 # plot(mcmc.x[5,], type = 'l')
 # hist(mcmc.x[5,], breaks = 50, probability = T); abline(v=x[5], col = 'red'); abline(v = mean(mcmc.x[5,]), col = 'blue', lty = 2); lines(density(mcmc.x[5,], n = 50))
 # acf(mcmc.x[5,], lag.max = 100)
-# 
+ 
 # plot(mcmc.M, type = 'l')
 # hist(mcmc.M, breaks = 30, probability = T); abline(v = true.M, col = 'red'); abline(v = mean(mcmc.M), col = 'blue', lty = 2); lines(density(mcmc.M, n = 512))
 # acf(mcmc.M, lag.max = 100)
